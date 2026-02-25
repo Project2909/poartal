@@ -34,7 +34,7 @@ const LOGIN_HTML = `
 <!DOCTYPE html>
 <html>
 <head>
-<title>BHEL</title>
+<title>BHEL Login</title>
 <style>
 body{font-family:Segoe UI;background:#eef2f7;}
 .box{width:350px;margin:100px auto;background:white;padding:30px;border-radius:8px}
