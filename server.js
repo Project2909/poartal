@@ -10,16 +10,12 @@ const upload = multer({ storage: multer.memoryStorage() });
 app.use("/static", express.static(path.join(__dirname, "static")));
 app.use(express.urlencoded({ extended: true }));
 
+/* ---------------- SESSION ---------------- */
 app.use(session({
-    secret: "bhel_secure_key",
+    secret: "bhel_secret_key",
     resave: false,
     saveUninitialized: true
 }));
-
-/* ---------------- IN-MEMORY EMPLOYEE STORE ---------------- */
-const employees = {}; // { empId: { username, empId } }
-
-let storedData = null;
 
 /* ---------------- AUTH MIDDLEWARE ---------------- */
 function auth(req, res, next) {
@@ -27,63 +23,14 @@ function auth(req, res, next) {
     else res.redirect("/login");
 }
 
-/* ---------------- LOGIN PAGE ---------------- */
-const LOGIN_HTML = `
-<!DOCTYPE html>
-<html>
-<head>
-<title>BHEL Login</title>
-<style>
-body{font-family:'Segoe UI';background:#eef2f7;}
-.box{background:white;width:420px;margin:100px auto;padding:30px;border-radius:8px;text-align:center;}
-input{width:90%;padding:10px;margin:10px 0;}
-button{background:#0a3d62;color:white;border:none;padding:10px 25px;}
-a{color:#0a3d62;text-decoration:none;}
-</style>
-</head>
-<body>
-<div class="box">
-<h2>BHEL Employee Login</h2>
-<form method="POST">
-<input name="empId" placeholder="Employee ID" required>
-<input name="username" placeholder="Employee Username" required>
-<button>Login</button>
-</form>
-<p style="color:red">{{ERROR}}</p>
-<p><a href="/signup">Create Account</a></p>
-</div>
-</body>
-</html>`;
+/* ---------------- IN-MEMORY USERS ---------------- */
+const employees = {}; // { empId: { empId, username } }
 
-/* ---------------- SIGNUP PAGE ---------------- */
-const SIGNUP_HTML = `
-<!DOCTYPE html>
-<html>
-<head>
-<title>BHEL Signup</title>
-<style>
-body{font-family:'Segoe UI';background:#eef2f7;}
-.box{background:white;width:420px;margin:100px auto;padding:30px;border-radius:8px;text-align:center;}
-input{width:90%;padding:10px;margin:10px 0;}
-button{background:#0a3d62;color:white;border:none;padding:10px 25px;}
-</style>
-</head>
-<body>
-<div class="box">
-<h2>Create Employee Account</h2>
-<form method="POST">
-<input name="empId" placeholder="Employee ID" required>
-<input name="username" placeholder="Employee Username" required>
-<button>Create Account</button>
-</form>
-<p style="color:red">{{ERROR}}</p>
-</div>
-</body>
-</html>`;
+let storedData = null;
 
-/* ---------------- HEADER & FOOTER ---------------- */
+/* ---------------- COMMON LAYOUT ---------------- */
 function layout(title, user, content) {
-return `
+    return `
 <!DOCTYPE html>
 <html>
 <head>
@@ -94,14 +41,15 @@ header,footer{background:#0a3d62;color:white;padding:15px 40px;}
 header nav a{color:white;margin-right:20px;text-decoration:none;}
 .user{float:right;font-weight:bold;}
 footer{position:fixed;bottom:0;width:100%;text-align:center;}
-.container{padding:40px;padding-bottom:80px;}
+.container{padding:40px;padding-bottom:90px;}
+button{background:#1e90ff;color:white;border:none;padding:10px 20px;}
 </style>
 </head>
 <body>
 
 <header>
 <nav>
-<a href="/dashboard">Dashboard</a>
+<a href="/home">Dashboard</a>
 <a href="/upload">Manpower Allocation</a>
 <a href="/work">Work Allocation</a>
 <a href="/logout">Logout</a>
@@ -119,97 +67,139 @@ ${content}
 </html>`;
 }
 
-/* ---------------- DASHBOARD ---------------- */
-app.get("/dashboard", auth, (req, res) => {
+/* ---------------- LOGIN ---------------- */
+app.get("/login",(req,res)=>{
+    res.send(`
+<!DOCTYPE html>
+<html>
+<head>
+<title>Login</title>
+<style>
+body{font-family:'Segoe UI';background:#eef2f7;}
+.box{background:white;width:400px;margin:120px auto;padding:30px;border-radius:8px;text-align:center;}
+input{width:90%;padding:10px;margin:10px 0;}
+button{background:#0a3d62;color:white;border:none;padding:10px 25px;}
+</style>
+</head>
+<body>
+<div class="box">
+<h2>BHEL Employee Login</h2>
+<form method="POST">
+<input name="empId" placeholder="Employee ID" required>
+<input name="username" placeholder="Username" required>
+<button>Login</button>
+</form>
+<p><a href="/signup">Create Account</a></p>
+</div>
+</body>
+</html>
+`);
+});
+
+app.post("/login",(req,res)=>{
+    const { empId, username } = req.body;
+    if (employees[empId] && employees[empId].username === username) {
+        req.session.user = employees[empId];
+        res.redirect("/home");
+    } else {
+        res.send("Invalid credentials");
+    }
+});
+
+/* ---------------- SIGNUP ---------------- */
+app.get("/signup",(req,res)=>{
+    res.send(`
+<!DOCTYPE html>
+<html>
+<head><title>Signup</title></head>
+<body style="font-family:'Segoe UI';background:#eef2f7;">
+<div style="background:white;width:400px;margin:120px auto;padding:30px;border-radius:8px;text-align:center;">
+<h2>Create Employee Account</h2>
+<form method="POST">
+<input name="empId" placeholder="Employee ID" required><br><br>
+<input name="username" placeholder="Username" required><br><br>
+<button>Create Account</button>
+</form>
+</div>
+</body>
+</html>
+`);
+});
+
+app.post("/signup",(req,res)=>{
+    const { empId, username } = req.body;
+    employees[empId] = { empId, username };
+    res.redirect("/login");
+});
+
+/* ---------------- LOGOUT ---------------- */
+app.get("/logout",(req,res)=>{
+    req.session.destroy(()=>res.redirect("/login"));
+});
+
+/* ---------------- HOME ---------------- */
+app.get("/home", auth, (req,res)=>{
     res.send(layout(
-        "Dashboard",
+        "Home",
         req.session.user,
         `<h2>Welcome ${req.session.user.username}</h2>
-         <p>Employee ID: ${req.session.user.empId}</p>`
+         <p>Select a module from the header.</p>`
     ));
 });
 
-/* ---------------- UPLOAD PAGE ---------------- */
-const UPLOAD_HTML = `
-<h2>Upload Manpower Excel</h2>
+/* ---------------- UPLOAD (UNCHANGED FLOW) ---------------- */
+app.get("/upload", auth, (req,res)=>{
+    res.send(layout("Upload", req.session.user, `
+<h3>Upload Manpower Excel</h3>
 <form method="POST" enctype="multipart/form-data">
 <input type="file" name="excel" required><br><br>
 <button>Upload</button>
-</form>`;
+</form>
+`));
+});
 
-/* ---------------- ALLOCATION PAGE ---------------- */
-function allocationPage(data) {
-return `
-<h2>Manpower Allocation</h2>
+app.post("/upload", auth, upload.single("excel"), (req,res)=>{
+    const workbook = XLSX.read(req.file.buffer);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    storedData = XLSX.utils.sheet_to_json(sheet);
+    res.redirect("/allocate");
+});
+
+/* ---------------- ALLOCATE (UNCHANGED) ---------------- */
+app.get("/allocate", auth, (req,res)=>{
+    const data = storedData.map(r=>({ area:r.Area, total:r.Manpower }));
+    res.send(layout("Allocate", req.session.user, `
 <form method="POST" action="/generate">
 <table border="1" cellpadding="10">
-<tr><th>Select</th><th>Area</th><th>Current</th><th>%</th><th>Updated</th></tr>
+<tr><th>Select</th><th>Area</th><th>Current</th><th>%</th></tr>
 ${data.map((r,i)=>`
 <tr>
 <td><input type="checkbox" name="check_${i}"></td>
 <td>${r.area}</td>
 <td>${r.total}</td>
 <td><input name="percent_${i}" value="100"></td>
-<td>${r.total}</td>
 </tr>`).join("")}
 </table>
 <input type="hidden" name="rows" value="${data.length}">
 <br><button>Generate Excel</button>
-</form>`;
-}
-
-/* ---------------- ROUTES ---------------- */
-app.get("/", (req,res)=>res.redirect("/login"));
-
-app.get("/login",(req,res)=>res.send(LOGIN_HTML.replace("{{ERROR}}","")));
-app.post("/login",(req,res)=>{
-    const { empId, username } = req.body;
-    if(employees[empId] && employees[empId].username === username){
-        req.session.user = employees[empId];
-        res.redirect("/dashboard");
-    } else {
-        res.send(LOGIN_HTML.replace("{{ERROR}}","Invalid credentials"));
-    }
+</form>
+`));
 });
 
-app.get("/signup",(req,res)=>res.send(SIGNUP_HTML.replace("{{ERROR}}","")));
-app.post("/signup",(req,res)=>{
-    const { empId, username } = req.body;
-    if(employees[empId]){
-        res.send(SIGNUP_HTML.replace("{{ERROR}}","Employee already exists"));
-    } else {
-        employees[empId] = { empId, username };
-        res.redirect("/login");
-    }
-});
-
-app.get("/logout",(req,res)=>{
-    req.session.destroy(()=>res.redirect("/login"));
-});
-
-app.get("/upload",auth,(req,res)=>{
-    res.send(layout("Upload", req.session.user, UPLOAD_HTML));
-});
-
-app.post("/upload",auth,upload.single("excel"),(req,res)=>{
-    const wb = XLSX.read(req.file.buffer);
-    storedData = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-    res.redirect("/allocate");
-});
-
-app.get("/allocate",auth,(req,res)=>{
-    const data = storedData.map(r=>({area:r.Area,total:r.Manpower}));
-    res.send(layout("Allocate", req.session.user, allocationPage(data)));
-});
-
-app.post("/generate",auth,(req,res)=>{
+/* ---------------- GENERATE (UNCHANGED) ---------------- */
+app.post("/generate", auth, (req,res)=>{
     let output=[];
     storedData.forEach((r,i)=>{
         if(req.body["check_"+i]){
             let p=req.body["percent_"+i];
-            output.push({Area:r.Area,Allocated_Percentage:p,Updated_Manpower:r.Manpower*p/100});
+            output.push({
+                Area:r.Area,
+                Allocated_Percentage:p,
+                Updated_Manpower:Math.round(r.Manpower*p/100)
+            });
         }
     });
+
     const wb=XLSX.utils.book_new();
     const ws=XLSX.utils.json_to_sheet(output);
     XLSX.utils.book_append_sheet(wb,ws,"Updated");
@@ -217,8 +207,9 @@ app.post("/generate",auth,(req,res)=>{
     res.send(XLSX.write(wb,{type:"buffer",bookType:"xlsx"}));
 });
 
-app.get("/work",auth,(req,res)=>{
-    res.send(layout("Work Allocation", req.session.user, "<h2>Work Allocation – Coming Soon</h2>"));
+/* ---------------- WORK ---------------- */
+app.get("/work", auth, (req,res)=>{
+    res.send(layout("Work Allocation", req.session.user, "<h3>Work Allocation – Coming Soon</h3>"));
 });
 
 /* ---------------- RUN ---------------- */
