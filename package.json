@@ -1,7 +1,7 @@
 {
-  "name": "manpower-allocation-portal",
+  "name": "bhel-manpower-portal",
   "version": "1.0.0",
-  "description": "AADHVI Technologies Manpower Allocation System",
+  "description": "BHEL Manpower Allocation System",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -16,5 +16,3 @@
     "express-session": "^1.17.3"
   }
 }
-
-
